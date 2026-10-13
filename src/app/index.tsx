@@ -1,98 +1,165 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
+import { router } from 'expo-router';
+import { useEffect, useState } from 'react';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  TextInput,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
+import { supabase } from '@/lib/supabase';
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
-  return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
+export default function IndexScreen() {
+  const [isSignup, setIsSignup] = useState(true);
+  const [name, setName] = useState('');
+  const [building, setBuilding] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
-export default function HomeScreen() {
+  useEffect(() => {
+    // Check for existing session on app open
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) {
+        router.replace('/home');
+      }
+    });
+  
+    // Listen for auth state changes
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        router.replace('/home');
+      }
+    });
+  
+    return () => {
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+  
+  async function handleAuth() {
+    setLoading(true);
+
+    if (isSignup) {
+      const { data, error } = await supabase.auth.signUp({ email, password });
+
+      if (error) {
+        alert(error.message);
+        setLoading(false);
+        return;
+      }
+
+      if (data.user) {
+        await supabase
+          .from('profiles')
+          .update({ name, what_im_building: building })
+          .eq('id', data.user.id);
+      }
+    } else {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+      if (error) {
+        alert(error.message);
+        setLoading(false);
+        return;
+      }
+    }
+
+    setLoading(false);
+    router.replace('/home');
+  }
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
+        <KeyboardAvoidingView
+          style={styles.form}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <ThemedText type="title" style={styles.center}>
+            Pact 🚀
           </ThemedText>
-        </ThemedView>
+          <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
+            {isSignup ? 'Build together. Show up daily.' : 'Welcome back'}
+          </ThemedText>
 
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
+          {isSignup && (
+            <>
+              <TextInput
+                style={styles.input}
+                placeholder="Your name"
+                placeholderTextColor="#666"
+                value={name}
+                onChangeText={setName}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="What are you building?"
+                placeholderTextColor="#666"
+                value={building}
+                onChangeText={setBuilding}
+              />
+            </>
+          )}
 
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
+          <TextInput
+            style={styles.input}
+            placeholder="Email"
+            placeholderTextColor="#666"
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
           />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
+          <TextInput
+            style={styles.input}
+            placeholder="Password"
+            placeholderTextColor="#666"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
           />
-        </ThemedView>
 
-        {Platform.OS === 'web' && <WebBadge />}
+          <Pressable style={styles.button} onPress={handleAuth} disabled={loading}>
+            <ThemedText style={styles.buttonText}>
+              {loading ? 'Loading...' : isSignup ? 'Create Account' : 'Log In'}
+            </ThemedText>
+          </Pressable>
+
+          <Pressable onPress={() => setIsSignup(!isSignup)}>
+            <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
+              {isSignup ? 'Already have an account? Log in' : "Don't have an account? Sign up"}
+            </ThemedText>
+          </Pressable>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
+  container: { flex: 1 },
+  safeArea: { flex: 1, justifyContent: 'center', paddingHorizontal: Spacing.four },
+  form: { gap: Spacing.three },
+  center: { textAlign: 'center', marginBottom: Spacing.two },
+  input: {
+    backgroundColor: '#1a1a1a',
+    color: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    fontSize: 16,
   },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
+  button: {
+    backgroundColor: '#22c55e',
+    padding: 16,
+    borderRadius: 12,
     alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
+    marginTop: Spacing.two,
   },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
-  },
-  title: {
-    textAlign: 'center',
-  },
-  code: {
-    textTransform: 'uppercase',
-  },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
-  },
+  buttonText: { color: '#000', fontWeight: 'bold' },
 });
