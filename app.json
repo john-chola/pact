@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "pact",
+    "name": "Pact",
     "slug": "pact",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -15,14 +15,14 @@
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png",
-        "permissions": [
-          "RECEIVE_BOOT_COMPLETED",
-          "SCHEDULE_EXACT_ALARM"
-        ]
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.johnchola.pact"
+      "package": "com.johnchola.pact",
+      "permissions": [
+        "RECEIVE_BOOT_COMPLETED",
+        "SCHEDULE_EXACT_ALARM"
+      ]
     },
     "web": {
       "output": "static",
