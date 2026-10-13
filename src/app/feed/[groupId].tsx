@@ -19,7 +19,7 @@ import {
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
-import { addDays, liveStreak, localDate, sprintDay, timeAgo } from '@/lib/dates';
+import { addDays, isQuiet, liveStreak, localDate, sprintDay, timeAgo } from '@/lib/dates';
 import { supabase } from '@/lib/supabase';
 import { REACTION_EMOJIS, type Checkin, type Group, type Member, type Profile } from '@/lib/types';
 
@@ -132,7 +132,6 @@ export default function FeedScreen() {
   if (!loaded || !group || !userId) return <Loading />;
 
   const today = localDate();
-  const yesterday = addDays(today, -1);
   const day = sprintDay(group.sprint_start_date, today);
   const sprintOver = day > group.sprint_duration_days;
   const me = members.find((m) => m.user_id === userId);
@@ -298,9 +297,7 @@ export default function FeedScreen() {
       <Card>
         {members.map((m) => {
           const doneToday = m.last_checkin_date === today;
-          const quiet =
-            !doneToday &&
-            (m.last_checkin_date ? m.last_checkin_date < yesterday : m.joined_at.slice(0, 10) < today);
+          const quiet = isQuiet(m, today);
           const isMe = m.user_id === userId;
           return (
             <Row key={m.user_id} style={styles.memberRow}>

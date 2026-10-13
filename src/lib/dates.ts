@@ -35,3 +35,16 @@ export function timeAgo(iso: string) {
   if (seconds < 86_400) return `${Math.floor(seconds / 3600)}h ago`;
   return `${Math.floor(seconds / 86_400)}d ago`;
 }
+
+/**
+ * A member is "quiet" (and can be nudged) when they haven't checked in today
+ * and also missed yesterday — or never checked in and joined before today.
+ */
+export function isQuiet(
+  member: { last_checkin_date: string | null; joined_at: string },
+  today = localDate()
+) {
+  if (member.last_checkin_date === today) return false;
+  if (member.last_checkin_date) return member.last_checkin_date < addDays(today, -1);
+  return localDate(new Date(member.joined_at)) < today;
+}

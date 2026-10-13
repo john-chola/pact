@@ -96,7 +96,7 @@ export default function NotificationsScreen() {
       <BackButton />
       <ThemedText type="subtitle">Reminders 🔔</ThemedText>
       <ThemedText themeColor="textSecondary">
-        Pick a time and we'll remind you to check in with your group every day.
+        Pick a time and we’ll remind you to check in with your group every day.
       </ThemedText>
 
       <SectionLabel>Hour</SectionLabel>
