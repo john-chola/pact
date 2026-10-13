@@ -14,6 +14,11 @@ type AuthContextValue = {
   signOut: () => Promise<void>;
 };
 
+async function fetchProfile(userId: string) {
+  const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+  return (data as Profile | null) ?? null;
+}
+
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -36,13 +41,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshProfile = useCallback(async () => {
     if (!userId) return;
-    const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
-    setProfileState({ userId, profile: (data as Profile | null) ?? null });
+    setProfileState({ userId, profile: await fetchProfile(userId) });
   }, [userId]);
 
   useEffect(() => {
-    if (userId) refreshProfile();
-  }, [userId, refreshProfile]);
+    if (!userId) return;
+    let cancelled = false;
+    fetchProfile(userId).then((profile) => {
+      if (!cancelled) setProfileState({ userId, profile });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   const signOut = useCallback(async () => {
     await Promise.allSettled([removePushToken(), cancelAllReminders()]);

@@ -68,8 +68,9 @@ export async function syncPushToken() {
       .from('push_tokens')
       .upsert({ user_id: userData.user.id, token, updated_at: new Date().toISOString() });
   } catch (err) {
-    // Offline or push not configured (e.g. Expo Go) — try again next launch.
-    console.log('Could not register push token', err);
+    // Remote push needs FCM credentials on Android (see README). Local daily
+    // reminders don't depend on this, only nudges from group mates do.
+    console.log('Remote push not set up yet; nudges disabled on this device.', String(err).slice(0, 120));
   }
 }
 
@@ -93,6 +94,23 @@ export async function scheduleDailyReminder(hour: number, minute: number) {
       type: Notifications.SchedulableTriggerInputTypes.DAILY,
       hour,
       minute,
+      channelId: 'default',
+    },
+  });
+}
+
+/** Fires a local notification a few seconds from now to confirm reminders work. */
+export async function sendTestNotification() {
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: 'Pact 🚀',
+      body: 'Reminders are working. See you at check-in time 🔥',
+      sound: true,
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      seconds: 5,
+      channelId: 'default',
     },
   });
 }

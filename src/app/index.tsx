@@ -105,7 +105,7 @@ export default function HomeScreen() {
       {groups.length === 0 ? (
         <Card style={styles.empty}>
           <ThemedText type="default" style={styles.center}>
-            You're not in a pact yet
+            You’re not in a pact yet
           </ThemedText>
           <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
             Start a 7-day sprint with up to 4 friends, or join one with a code.

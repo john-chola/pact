@@ -9,6 +9,7 @@ import {
   cancelAllReminders,
   requestNotificationPermissions,
   scheduleDailyReminder,
+  sendTestNotification,
   syncPushToken,
 } from '@/lib/notifications';
 import { supabase } from '@/lib/supabase';
@@ -64,6 +65,20 @@ export default function NotificationsScreen() {
     setLoading(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+    showMessage(
+      'Reminder set ✅',
+      `You'll get a notification every day at ${formatTime(selectedHour, selectedMinute)}. Tap "Send test notification" to check it works now.`
+    );
+  }
+
+  async function handleTest() {
+    const granted = await requestNotificationPermissions();
+    if (!granted) {
+      showMessage('Notifications are off', 'Enable notifications for Pact in your phone settings.');
+      return;
+    }
+    await sendTestNotification();
+    showMessage('Test sent', 'Lock your phone or go to the home screen — it arrives in about 5 seconds.');
   }
 
   async function handleDisable() {
@@ -81,7 +96,7 @@ export default function NotificationsScreen() {
       <BackButton />
       <ThemedText type="subtitle">Reminders 🔔</ThemedText>
       <ThemedText themeColor="textSecondary">
-        Pick a time and we'll remind you to check in with your group every day.
+        Pick a time and we’ll remind you to check in with your group every day.
       </ThemedText>
 
       <SectionLabel>Hour</SectionLabel>
@@ -128,6 +143,12 @@ export default function NotificationsScreen() {
       ) : (
         <Button title="Enable Daily Reminder" onPress={handleSave} loading={loading} />
       )}
+
+      <Button title="Send test notification" variant="ghost" onPress={handleTest} />
+      <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
+        Not getting reminders? Make sure notifications are allowed for Pact and battery
+        optimization is turned off for it in your phone settings.
+      </ThemedText>
     </Screen>
   );
 }

@@ -101,7 +101,7 @@ export default function GroupsScreen() {
         </Row>
 
         <ThemedText type="small" themeColor="textSecondary">
-          Your 7-day sprint starts today. You'll get a code to share with up to 4 friends.
+          Your 7-day sprint starts today. You’ll get a code to share with up to 4 friends.
         </ThemedText>
 
         <Button title="Create Group" onPress={handleCreate} loading={loading} />
