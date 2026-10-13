@@ -1,165 +1,170 @@
-import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  TextInput,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import { Button, Card, Loading, Row, Screen, SectionLabel } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
+import { useAuth } from '@/lib/auth';
+import { liveStreak, localDate, sprintDay } from '@/lib/dates';
 import { supabase } from '@/lib/supabase';
+import type { Group, Member } from '@/lib/types';
 
-export default function IndexScreen() {
-  const [isSignup, setIsSignup] = useState(true);
-  const [name, setName] = useState('');
-  const [building, setBuilding] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+type HomeGroup = Group & { me: Member; memberCount: number };
 
-  useEffect(() => {
-    // Check for existing session on app open
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) {
-        router.replace('/home');
-      }
-    });
-  
-    // Listen for auth state changes
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        router.replace('/home');
-      }
-    });
-  
-    return () => {
-      listener.subscription.unsubscribe();
-    };
-  }, []);
-  
-  async function handleAuth() {
-    setLoading(true);
+export default function HomeScreen() {
+  const { session, profile, refreshProfile, signOut } = useAuth();
+  const theme = useTheme();
+  const [groups, setGroups] = useState<HomeGroup[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const userId = session?.user.id;
 
-    if (isSignup) {
-      const { data, error } = await supabase.auth.signUp({ email, password });
+  const load = useCallback(async () => {
+    if (!userId) return;
+    const { data } = await supabase
+      .from('group_members')
+      .select('user_id, joined_at, streak_count, longest_streak, last_checkin_date, groups(*)')
+      .eq('user_id', userId)
+      .order('joined_at', { ascending: false });
 
-      if (error) {
-        alert(error.message);
-        setLoading(false);
-        return;
-      }
+    const rows = (data ?? []).filter((row: any) => row.groups);
+    const ids = rows.map((row: any) => row.groups.id as string);
 
-      if (data.user) {
-        await supabase
-          .from('profiles')
-          .update({ name, what_im_building: building })
-          .eq('id', data.user.id);
-      }
-    } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-
-      if (error) {
-        alert(error.message);
-        setLoading(false);
-        return;
-      }
+    const counts = new Map<string, number>();
+    if (ids.length) {
+      const { data: all } = await supabase.from('group_members').select('group_id').in('group_id', ids);
+      for (const m of all ?? []) counts.set(m.group_id, (counts.get(m.group_id) ?? 0) + 1);
     }
 
+    setGroups(
+      rows.map((row: any) => {
+        const { groups: group, ...me } = row;
+        return { ...(group as Group), me: me as Member, memberCount: counts.get(group.id) ?? 1 };
+      })
+    );
     setLoading(false);
-    router.replace('/home');
+  }, [userId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+      refreshProfile();
+    }, [load, refreshProfile])
+  );
+
+  async function onRefresh() {
+    setRefreshing(true);
+    await Promise.all([load(), refreshProfile()]);
+    setRefreshing(false);
   }
 
+  if (loading) return <Loading />;
+
+  const today = localDate();
+  const streak = liveStreak(profile?.streak_count ?? 0, profile?.last_checkin_date ?? null, today);
+  const checkedInToday = profile?.last_checkin_date === today;
+
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <KeyboardAvoidingView
-          style={styles.form}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
-          <ThemedText type="title" style={styles.center}>
-            Pact 🚀
+    <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+      <Row style={styles.header}>
+        <ThemedText type="subtitle">Pact 🚀</ThemedText>
+        <Row style={styles.headerActions}>
+          <Pressable
+            accessibilityLabel="Reminders"
+            hitSlop={8}
+            onPress={() => router.push('/notifications')}>
+            <ThemedText>🔔</ThemedText>
+          </Pressable>
+          <Pressable hitSlop={8} onPress={signOut}>
+            <ThemedText type="small" themeColor="textSecondary">
+              Log out
+            </ThemedText>
+          </Pressable>
+        </Row>
+      </Row>
+
+      <ThemedText themeColor="textSecondary">
+        Hey {profile?.name?.split(' ')[0]} 👋
+        {profile?.what_im_building ? ` How's ${profile.what_im_building} going?` : ''}
+      </ThemedText>
+
+      <Card style={styles.streakCard}>
+        <View>
+          <ThemedText style={styles.streakNumber}>🔥 {streak}</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            day streak · best {profile?.longest_streak ?? 0}
+          </ThemedText>
+        </View>
+        <ThemedText type="small" style={{ color: checkedInToday ? theme.successText : theme.warning }}>
+          {checkedInToday ? 'Checked in today ✅' : streak > 0 ? 'Check in to keep it alive' : 'Start a streak today'}
+        </ThemedText>
+      </Card>
+
+      {groups.length === 0 ? (
+        <Card style={styles.empty}>
+          <ThemedText type="default" style={styles.center}>
+            You're not in a pact yet
           </ThemedText>
           <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
-            {isSignup ? 'Build together. Show up daily.' : 'Welcome back'}
+            Start a 7-day sprint with up to 4 friends, or join one with a code.
           </ThemedText>
-
-          {isSignup && (
-            <>
-              <TextInput
-                style={styles.input}
-                placeholder="Your name"
-                placeholderTextColor="#666"
-                value={name}
-                onChangeText={setName}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="What are you building?"
-                placeholderTextColor="#666"
-                value={building}
-                onChangeText={setBuilding}
-              />
-            </>
-          )}
-
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            placeholderTextColor="#666"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
+          <Button title="Create or join a pact" onPress={() => router.push('/groups')} />
+        </Card>
+      ) : (
+        <>
+          <SectionLabel>Your pacts</SectionLabel>
+          {groups.map((group) => {
+            const day = sprintDay(group.sprint_start_date, today);
+            const over = day > group.sprint_duration_days;
+            const doneToday = group.me.last_checkin_date === today;
+            return (
+              <Pressable
+                key={group.id}
+                onPress={() =>
+                  router.push({ pathname: '/feed/[groupId]', params: { groupId: group.id } })
+                }>
+                <Card>
+                  <Row style={styles.spread}>
+                    <ThemedText style={styles.groupName}>{group.name}</ThemedText>
+                    <ThemedText>→</ThemedText>
+                  </Row>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    {group.goal_category} · {group.memberCount}/{group.max_members} members ·{' '}
+                    {over
+                      ? `Sprint ${group.sprint_number} complete 🎉`
+                      : `Day ${day} of ${group.sprint_duration_days}`}
+                  </ThemedText>
+                  {!over && (
+                    <ThemedText
+                      type="small"
+                      style={{ color: doneToday ? theme.successText : theme.warning }}>
+                      {doneToday ? '✅ Checked in today' : '⏳ Waiting on your check-in'}
+                    </ThemedText>
+                  )}
+                </Card>
+              </Pressable>
+            );
+          })}
+          <Button
+            title="+ Create or join another pact"
+            variant="outline"
+            onPress={() => router.push('/groups')}
           />
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            placeholderTextColor="#666"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
-
-          <Pressable style={styles.button} onPress={handleAuth} disabled={loading}>
-            <ThemedText style={styles.buttonText}>
-              {loading ? 'Loading...' : isSignup ? 'Create Account' : 'Log In'}
-            </ThemedText>
-          </Pressable>
-
-          <Pressable onPress={() => setIsSignup(!isSignup)}>
-            <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
-              {isSignup ? 'Already have an account? Log in' : "Don't have an account? Sign up"}
-            </ThemedText>
-          </Pressable>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-    </ThemedView>
+        </>
+      )}
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  safeArea: { flex: 1, justifyContent: 'center', paddingHorizontal: Spacing.four },
-  form: { gap: Spacing.three },
-  center: { textAlign: 'center', marginBottom: Spacing.two },
-  input: {
-    backgroundColor: '#1a1a1a',
-    color: '#fff',
-    padding: 16,
-    borderRadius: 12,
-    fontSize: 16,
-  },
-  button: {
-    backgroundColor: '#22c55e',
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: Spacing.two,
-  },
-  buttonText: { color: '#000', fontWeight: 'bold' },
+  header: { justifyContent: 'space-between' },
+  headerActions: { gap: Spacing.three },
+  center: { textAlign: 'center' },
+  spread: { justifyContent: 'space-between', flexWrap: 'nowrap' },
+  streakCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  streakNumber: { fontSize: 28, lineHeight: 34, fontWeight: 700 },
+  empty: { alignItems: 'stretch', gap: Spacing.three, paddingVertical: Spacing.four },
+  groupName: { fontWeight: 700, fontSize: 17, flexShrink: 1 },
 });
